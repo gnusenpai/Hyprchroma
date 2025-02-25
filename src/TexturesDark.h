@@ -12,31 +12,37 @@ uniform vec3 bkg;
 
 void invert(inout vec4 color) {
     if (doInvert) {
-        // Original shader by ikz87
+        // true chroma key shader
+        // from https://www.shadertoy.com/view/XsjyDy
 
-        // Apply opacity changes to pixels similar to one color
-        // vec3 color_rgb = vec3(0,0,255); // Color to replace, in rgb format
-        float similarity = 0.1; // How many similar colors should be affected.
+        vec3 chroma = vec3(0,1,0);
 
-        float amount = 1.4; // How much similar colors should be changed.
-        float target_opacity = 0.83;
-        // Change any of the above values to get the result you want
+        float level = 0.5;
+        float threshold = 0.35;
 
-        // Set values to a 0 - 1 range
-        vec3 chroma = vec3(bkg[0]/255.0, bkg[1]/255.0, bkg[2]/255.0);
+        // normalize colors
+        // normLength is used to filter false color matches
+        float normLength = clamp(length(color.rgb) / length(chroma.rgb), 0.0, 1.0);
+        vec3 normColor = normalize(color.rgb) * normLength;
+        vec3 normKey = normalize(chroma.rgb);
 
-        if (color.x >=chroma.x - similarity && color.x <=chroma.x + similarity &&
-                color.y >=chroma.y - similarity && color.y <=chroma.y + similarity &&
-                color.z >=chroma.z - similarity && color.z <=chroma.z + similarity &&
-                color.w >= 0.99)
-        {
-            // Calculate error between matched pixel and color_rgb values
-                vec3 error = vec3(abs(chroma.x - color.x), abs(chroma.y - color.y), abs(chroma.z - color.z));
-            float avg_error = (error.x + error.y + error.z) / 3.0;
-                color.w = target_opacity + (1.0 - target_opacity)*avg_error*amount/similarity;
+        // Calculate difference from KEY_COLOR
+        float colorDiff = length(normColor - normKey);
 
-            // color.rgba = vec4(0, 0, 1, 0.5);
+        if (color.rgb == vec3(0,0,0)) {
+            // fix pure black hack
+            colorDiff = 1.;
+        } else {
+            // remove green edge glow
+            colorDiff = smoothstep(level - threshold, level + threshold, colorDiff);
+            color.g = color.g - (chroma.g * (1.0 - colorDiff));
         }
+
+        // NOTE!
+        // In reality, filtered image should not be mixed, but rendered in a seperate pass
+        // This will also enable removal of dark alpha edges (maybe that is the buffer functionality)
+
+        color.a = colorDiff;
     }
 }
 )glsl";
